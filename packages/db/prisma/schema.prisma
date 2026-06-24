@@ -1,0 +1,258 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// BetterAuth models
+model User {
+  id            String    @id @default(uuid())
+  name          String
+  email         String    @unique
+  emailVerified Boolean
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sessions      Session[]
+  accounts      Account[]
+  members       Member[]
+  invitations   Invitation[]
+
+  @@map("user")
+}
+
+model Session {
+  id                   String   @id @default(uuid())
+  userId               String
+  token                String   @unique
+  expiresAt            DateTime
+  ipAddress            String?
+  userAgent            String?
+  activeOrganizationId String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("session")
+}
+
+model Account {
+  id           String    @id @default(uuid())
+  userId       String
+  accountId    String
+  providerId   String
+  password     String?
+  accessToken  String?
+  refreshToken String?
+  idToken      String?
+  expiresAt    DateTime?
+  scope        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("account")
+}
+
+model Verification {
+  id         String    @id @default(uuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime?
+  updatedAt  DateTime?
+
+  @@map("verification")
+}
+
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  logo      String?
+  createdAt DateTime @default(now())
+  metadata  String?  // stringified JSON for additional data
+
+  members     Member[]
+  invitations Invitation[]
+  projects    Project[]
+  subscription OrgSubscription?
+
+  @@map("organization")
+}
+
+model Member {
+  id             String       @id @default(uuid())
+  organizationId String
+  userId         String
+  role           String
+  createdAt      DateTime     @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("member")
+}
+
+model Invitation {
+  id             String       @id @default(uuid())
+  organizationId String
+  email          String
+  role           String
+  status         String
+  expiresAt      DateTime
+  inviterId      String
+  createdAt      DateTime     @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  inviter        User         @relation(fields: [inviterId], references: [id], onDelete: Cascade)
+
+  @@map("invitation")
+}
+
+// SaaS Billing and Limits
+model OrgSubscription {
+  id                     String       @id @default(uuid())
+  organizationId         String       @unique
+  plan                   String       @default("FREE") // "FREE", "PREMIUM"
+  razorpaySubscriptionId String?
+  razorpayCustomerId     String?
+  aiCredits              Int          @default(5)
+  repoLimit              Int          @default(1)
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
+
+  organization           Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("org_subscription")
+}
+
+// ShipFlow Project Models
+model Project {
+  id             String       @id @default(uuid())
+  organizationId String
+  name           String
+  description    String?
+  githubRepo     String?      // format: "owner/repo"
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  features       FeatureRequest[]
+
+  @@map("project")
+}
+
+model FeatureRequest {
+  id          String    @id @default(uuid())
+  projectId   String
+  title       String
+  description String
+  source      String    @default("MANUAL") // "EMAIL", "SUPPORT", "MANUAL"
+  status      String    @default("DRAFT") // "DRAFT", "CLARIFYING", "PRD_GENERATING", "PRD_GENERATED", "TASKS_GENERATED", "DEVELOPING", "QA_REVIEWING", "HUMAN_APPROVAL", "SHIPPED"
+  prd         String?   @db.Text
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  chatMessages FeatureRequestChat[]
+  tasks       Task[]
+  pullRequests PullRequest[]
+  releases    Release[]
+
+  @@map("feature_request")
+}
+
+model FeatureRequestChat {
+  id               String         @id @default(uuid())
+  featureRequestId String
+  role             String         // "user" | "assistant"
+  content          String         @db.Text
+  createdAt        DateTime       @default(now())
+
+  featureRequest   FeatureRequest @relation(fields: [featureRequestId], references: [id], onDelete: Cascade)
+
+  @@map("feature_request_chat")
+}
+
+model Task {
+  id               String         @id @default(uuid())
+  featureRequestId String
+  title            String
+  description      String?        @db.Text
+  status           String         @default("TODO") // "TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  featureRequest   FeatureRequest @relation(fields: [featureRequestId], references: [id], onDelete: Cascade)
+
+  @@map("task")
+}
+
+model PullRequest {
+  id               String         @id @default(uuid())
+  featureRequestId String
+  prNumber         Int
+  title            String
+  state            String         // "OPEN", "MERGED", "CLOSED"
+  htmlUrl          String?
+  sourceBranch     String?
+  targetBranch     String?
+  diff             String?        @db.Text
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  featureRequest   FeatureRequest @relation(fields: [featureRequestId], references: [id], onDelete: Cascade)
+  reviews          QAReview[]
+
+  @@map("pull_request")
+}
+
+model QAReview {
+  id            String         @id @default(uuid())
+  pullRequestId String
+  status        String         // "APPROVED", "CHANGES_REQUESTED"
+  feedback      String         @db.Text
+  createdAt     DateTime       @default(now())
+
+  pullRequest   PullRequest    @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
+  issues        QAIssue[]
+
+  @@map("qa_review")
+}
+
+model QAIssue {
+  id          String   @id @default(uuid())
+  qaReviewId  String
+  title       String
+  description String   @db.Text
+  severity    String   // "BLOCKING", "NON_BLOCKING"
+  status      String   @default("OPEN") // "OPEN", "FIXED"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  qaReview    QAReview @relation(fields: [qaReviewId], references: [id], onDelete: Cascade)
+
+  @@map("qa_issue")
+}
+
+model Release {
+  id               String         @id @default(uuid())
+  featureRequestId String
+  status           String         @default("PENDING") // "PENDING", "APPROVED", "REJECTED"
+  notes            String?        @db.Text
+  approvedBy       String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  featureRequest   FeatureRequest @relation(fields: [featureRequestId], references: [id], onDelete: Cascade)
+
+  @@map("release")
+}
