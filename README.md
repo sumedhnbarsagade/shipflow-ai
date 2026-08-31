@@ -1,159 +1,207 @@
-# Turborepo starter
+# ShipFlow AI 🚀
 
-This Turborepo starter is maintained by the Turborepo core team.
+**ShipFlow AI** is an event-driven, multi-agent framework designed to unify product planning, task estimation, and continuous code quality reviews into a single, automated delivery loop.
 
-## Using this example
+---
 
-Run the following command:
+## 🌟 Overview
 
-```sh
-npx create-turbo@latest
+In software development teams, product planning and code reviews often exist in silos. Product Managers write PRDs in static document editors, engineers manually break them down into tickets, and peer code reviews on GitHub are disconnected from the original acceptance criteria.
+
+**ShipFlow AI** bridges this gap:
+1. **Clarifies Requirements**: An interactive AI agent interviews you to flesh out edge cases, security requirements, and technical boundaries.
+2. **Generates PRDs**: Compiles an enterprise-grade Product Requirements Document (PRD) with user stories, acceptance criteria, and KPI metrics.
+3. **Breaks Down Tasks**: A Scrum Master Agent decomposes the PRD into atomic Kanban board tasks, complete with Fibonacci story points (1, 2, 3, 5, 8) and priority classifications.
+4. **Conducts AI Code Reviews**: Traces GitHub Pull Requests directly back to the generated PRD, conducting automated line-by-line QA and security audits.
+5. **Human Release Sign-Off**: Gives team leads a consolidated dashboard to approve releases.
+
+---
+
+## 🏗️ Architecture
+
+```mermaid
+graph TD
+    User([Developer / PM]) -->|Feature Idea| Chat[Requirement Clarification Agent]
+    Chat -->|Publish Event: prd.generate| Inngest[Inngest Workflow Engine]
+    Inngest -->|Trigger Function| PMAgent[Elite PM Agent]
+    PMAgent -->|GenerateText: groq/compound| PRD[Structured PRD]
+    PRD -->|Publish Event: tasks.generate| Inngest
+    Inngest -->|Trigger Function| TPMAgent[Scrum Master Agent]
+    TPMAgent -->|GenerateObject: Zod Schema| Tasks[Estimated Kanban Tasks]
+    Tasks -->|Link GitHub PR| QAAgent[AI QA & Security Agent]
+    QAAgent -->|Analyze Code Diff against PRD| Review[Line-by-Line PR Feedback]
+    Review --> Release[Human Release Sign-Off]
 ```
 
-## What's inside?
+---
 
-This Turborepo includes the following packages/apps:
+## 🛠️ Tech Stack
 
-### Apps and Packages
+- **Framework**: [Next.js 16](https://nextjs.org/) (App Router, Turbopack)
+- **Monorepo Tooling**: [Turborepo](https://turbo.build/repo)
+- **Background Jobs**: [Inngest](https://www.inngest.com/) (Event-driven serverless workflows)
+- **AI Inference Engine**: [Vercel AI SDK](https://sdk.vercel.ai/) powered by [Groq](https://groq.com/) (`groq/compound` / `meta-llama/llama-4-scout-17b-16e-instruct`)
+- **Type-Safe API**: [tRPC](https://trpc.io/) + [TanStack React Query](https://tanstack.com/query)
+- **Authentication**: [Better Auth](https://better-auth.com/) (Email/Password, Google & GitHub OAuth) with auto-logout on inactivity
+- **Database & ORM**: PostgreSQL + [Prisma ORM](https://www.prisma.io/)
+- **Styling**: Vanilla CSS (Deep space glassmorphism design system)
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+---
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
+## 📁 Repository Structure
 
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo build
+```text
+shipflow-ai/
+├── apps/
+│   └── web/                   # Next.js frontend & full-stack web application
+│       ├── app/               # App router pages (dashboard, feature, auth, billing)
+│       ├── lib/               # Auth client, tRPC client, utilities
+│       └── public/            # Static assets & fonts
+├── packages/
+│   ├── api/                   # tRPC routers (featureRequest, project, github, etc.)
+│   ├── auth/                  # Better Auth server configuration & plugins
+│   ├── db/                    # Prisma schema, migrations, and database client
+│   ├── inngest/               # Inngest function workflows (PRD, tasks, code review)
+│   ├── ui/                    # Shared React UI components
+│   ├── eslint-config/         # ESLint configurations
+│   └── typescript-config/     # Shared tsconfig definitions
+├── turbo.json                 # Turborepo pipeline configuration
+└── package.json               # Root monorepo workspace dependencies
 ```
 
-Without global `turbo`, use your package manager:
+---
 
-```sh
-cd my-turborepo
-npx turbo build
-pnpm dlx turbo build
-pnpm exec turbo build
+## 📋 Prerequisites
+
+Make sure you have the following installed on your machine:
+- **Node.js**: `v18.17.0` or higher (Recommended: `v20+`)
+- **pnpm**: `v9.0.0` or higher (`corepack enable && corepack prepare pnpm@latest --activate` or `npm i -g pnpm`)
+- **PostgreSQL**: A running local or cloud PostgreSQL instance (e.g. [Neon](https://neon.tech), [Supabase](https://supabase.com), or [Prisma Postgres](https://www.prisma.io/postgres))
+- **Groq API Key**: Get a free API key at [console.groq.com](https://console.groq.com)
+
+---
+
+## 🚀 Local Installation & Setup
+
+Follow these step-by-step instructions to clone, configure, and run ShipFlow AI on your local machine:
+
+### 1. Clone the Repository
+```bash
+git clone https://github.com/sumedhnbarsagade/shipflow-ai.git
+cd shipflow-ai
 ```
 
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo build --filter=docs
+### 2. Install Dependencies
+```bash
+pnpm install
 ```
 
-Without global `turbo`:
-
-```sh
-npx turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
+### 3. Configure Environment Variables
+Copy the example environment file to `.env`:
+```bash
+cp .env.example .env
 ```
 
-### Develop
+Open `.env` and configure your credentials:
 
-To develop all apps and packages, run the following command:
+```env
+# Database Settings
+DATABASE_URL="postgresql://user:password@localhost:5432/shipflow"
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
+# BetterAuth Settings
+BETTER_AUTH_SECRET="your-32-char-random-secret-key-here"
+NEXT_PUBLIC_APP_URL="http://localhost:3000"
 
-```sh
-cd my-turborepo
-turbo dev
+# AI Inference (Groq)
+GROQ_API_KEY="your-groq-api-key"
+
+# GitHub Integration (Optional - Fallback Mock available)
+GITHUB_TOKEN="your-github-personal-access-token"
+GITHUB_CLIENT_ID="your-github-oauth-client-id"
+GITHUB_CLIENT_SECRET="your-github-oauth-client-secret"
+
+# Google OAuth Social Provider (Optional)
+GOOGLE_CLIENT_ID="your-google-oauth-client-id"
+GOOGLE_CLIENT_SECRET="your-google-oauth-client-secret"
+
+# Payments (Optional - Fallback Mock available)
+RAZORPAY_KEY_ID="your-razorpay-key-id"
+RAZORPAY_KEY_SECRET="your-razorpay-key-secret"
 ```
 
-Without global `turbo`, use your package manager:
+> 💡 **Tip for `BETTER_AUTH_SECRET`**: You can generate a secure secret with `openssl rand -base64 32`.
 
-```sh
-cd my-turborepo
-npx turbo dev
-pnpm exec turbo dev
-pnpm exec turbo dev
+### 4. Setup Database Schema
+Push the Prisma schema to your database and generate the Prisma Client:
+
+```bash
+# Push schema tables to your database
+export $(cat .env | grep -v '#' | xargs) && pnpm --filter @repo/db exec prisma db push
+
+# Generate Prisma Client types
+pnpm --filter @repo/db run db:generate
 ```
 
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+### 5. Start the Development Server
+Run the local dev command. This will concurrently start **Next.js** (Turbopack) and the local **Inngest Dev Server**:
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo dev --filter=web
+```bash
+pnpm dev
 ```
 
-Without global `turbo`:
+The services will be available at:
+- 🌐 **Web Application**: [http://localhost:3000](http://localhost:3000)
+- ⚡ **Inngest Dev Server**: [http://localhost:8290](http://localhost:8290)
 
-```sh
-npx turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-```
+---
 
-### Remote Caching
+## 🧪 Testing the Workflow
 
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
+1. Navigate to [http://localhost:3000](http://localhost:3000) and click **Get Started** to create an account.
+2. Create a new **Project** from your dashboard.
+3. Submit a new **Feature Request** (e.g. *"Add Google and GitHub OAuth social login"*).
+4. Use the **Clarification Chat** to answer the AI PM's questions about your requirements.
+5. Click **Finalize & Generate PRD** to trigger the automated PRD & Kanban task generation.
+6. Under the **QA & Code** tab, link a live GitHub PR or click **Simulate PR** to watch the AI QA agent audit the code diff against the PRD.
 
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
+---
 
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
+## 📦 Available Scripts
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
+Run these scripts from the repository root:
 
-```sh
-cd my-turborepo
-turbo login
-```
+| Command | Description |
+| :--- | :--- |
+| `pnpm dev` | Starts Next.js and Inngest Dev Server concurrently |
+| `pnpm build` | Builds all packages and apps with Turborepo |
+| `pnpm lint` | Runs ESLint across the monorepo |
+| `pnpm check-types` | Performs TypeScript typechecking across all packages |
+| `pnpm --filter @repo/db exec prisma studio` | Opens Prisma Studio to view and edit database records |
 
-Without global `turbo`, use your package manager:
+---
 
-```sh
-cd my-turborepo
-npx turbo login
-pnpm exec turbo login
-pnpm exec turbo login
-```
+## 🚢 Deployment (Vercel + Inngest Cloud)
 
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
+### 1. Vercel Setup
+1. Push your repository to GitHub.
+2. Import the repository into [Vercel](https://vercel.com).
+3. Set the **Framework Preset** to `Next.js` and Root Directory to `./`.
+4. Configure all environment variables from `.env` in Vercel's **Environment Variables** settings.
 
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
+### 2. Inngest Cloud Setup
+When deploying to production, Inngest runs in the cloud:
+1. Create a free account at [Inngest Cloud](https://app.inngest.com).
+2. Retrieve your **Event Key** (`INNGEST_EVENT_KEY`) and **Signing Key** (`INNGEST_SIGNING_KEY`) from your Inngest Environment settings.
+3. Add `INNGEST_EVENT_KEY` and `INNGEST_SIGNING_KEY` to your Vercel Environment Variables.
+4. Set the Inngest App Sync URL in Inngest Cloud to: `https://your-vercel-domain.app/api/inngest`.
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
+### 3. OAuth Callback URLs
+In your Google Cloud Console and GitHub Developer Settings, add the production callback URLs:
+- **Google Authorized Redirect URI**: `https://your-vercel-domain.app/api/auth/callback/google`
+- **GitHub Authorization Callback URL**: `https://your-vercel-domain.app/api/auth/callback/github`
 
-```sh
-turbo link
-```
+---
 
-Without global `turbo`:
+## 📄 License
 
-```sh
-npx turbo link
-pnpm exec turbo link
-pnpm exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+This project is licensed under the MIT License.
