@@ -16,7 +16,9 @@
     "DATABASE_URL_DATABASE_URL",
     "GROQ_API_KEY",
     "GOOGLE_CLIENT_ID",
-    "GOOGLE_CLIENT_SECRET"
+    "GOOGLE_CLIENT_SECRET",
+    "INNGEST_EVENT_KEY",
+    "INNGEST_SIGNING_KEY"
   ],
   "tasks": {
     "build": {
