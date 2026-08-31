@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, protectedProcedure } from "../trpc";
+import { router, protectedProcedure, enforceFeatureMembership } from "../trpc";
 import { TRPCError } from "@trpc/server";
 
 export const releaseRouter = router({
@@ -11,6 +11,7 @@ export const releaseRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      await enforceFeatureMembership(ctx, input.featureRequestId);
       const feature = await ctx.prisma.featureRequest.findUnique({
         where: { id: input.featureRequestId },
       });
@@ -48,6 +49,7 @@ export const releaseRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      await enforceFeatureMembership(ctx, input.featureRequestId);
       const feature = await ctx.prisma.featureRequest.findUnique({
         where: { id: input.featureRequestId },
       });

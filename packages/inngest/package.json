@@ -8,11 +8,11 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "inngest": "^3.19.19",
+    "@ai-sdk/groq": "^1.2.9",
+    "@ai-sdk/openai": "^4.0.52",
     "@repo/db": "workspace:*",
-    "ai": "^3.1.30",
-    "@ai-sdk/google": "^0.0.21",
-    "@google/generative-ai": "^0.11.0",
+    "ai": "^4.1.25",
+    "inngest": "^3.19.19",
     "octokit": "^4.0.2",
     "zod": "^3.23.8"
   },

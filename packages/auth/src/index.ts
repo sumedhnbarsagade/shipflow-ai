@@ -13,6 +13,37 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
   },
+  account: {
+    accountLinking: {
+      enabled: true,
+      trustedProviders: ["google", "github"],
+    },
+  },
+  databaseHooks: {
+    user: {
+      create: {
+        before: async (user) => {
+          return {
+            data: {
+              ...user,
+              emailVerified: true,
+            },
+          };
+        },
+      },
+    },
+  },
+  socialProviders: {
+    github: {
+      clientId: process.env.GITHUB_CLIENT_ID || "mock-github-id",
+      clientSecret: process.env.GITHUB_CLIENT_SECRET || "mock-github-secret",
+      scope: ["repo", "read:org", "user"],
+    },
+    google: {
+      clientId: process.env.GOOGLE_CLIENT_ID || "mock-google-id",
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "mock-google-secret",
+    },
+  },
   plugins: [
     organization(),
   ],

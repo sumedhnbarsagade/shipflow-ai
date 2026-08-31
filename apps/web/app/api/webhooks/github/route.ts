@@ -1,10 +1,23 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@repo/db";
 import { inngest } from "@repo/inngest";
+import crypto from "crypto";
 
 export async function POST(req: Request) {
   try {
-    const payload = await req.json();
+    const rawBody = await req.text();
+    const signature = req.headers.get("x-hub-signature-256");
+    const secret = process.env.GITHUB_WEBHOOK_SECRET;
+
+    if (secret && signature) {
+      const hmac = crypto.createHmac("sha256", secret);
+      const digest = "sha256=" + hmac.update(rawBody).digest("hex");
+      if (signature !== digest) {
+        return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+      }
+    }
+
+    const payload = JSON.parse(rawBody);
     const event = req.headers.get("x-github-event");
 
     if (event === "pull_request") {
@@ -20,6 +33,29 @@ export async function POST(req: Request) {
       });
 
       if (project) {
+        // Fetch PR diff from GitHub directly
+        let diff = "";
+        const token = process.env.GITHUB_TOKEN;
+        try {
+          const headers: Record<string, string> = {
+            "Accept": "application/vnd.github.v3.diff",
+            "User-Agent": "ShipFlow-AI-Webhook",
+          };
+          if (token) {
+            headers["Authorization"] = `token ${token}`;
+          }
+          const response = await fetch(`https://api.github.com/repos/${repoFullName}/pulls/${prNumber}`, {
+            headers,
+          });
+          if (response.ok) {
+            diff = await response.text();
+          } else {
+            console.error(`GitHub API responded with status ${response.status} when fetching diff`);
+          }
+        } catch (err) {
+          console.error("Failed to fetch PR diff from GitHub API:", err);
+        }
+
         let pr = await prisma.pullRequest.findFirst({
           where: {
             prNumber,
@@ -44,6 +80,7 @@ export async function POST(req: Request) {
                 title,
                 state: state === "OPEN" ? "OPEN" : "CLOSED",
                 htmlUrl,
+                diff: diff || null,
               },
             });
           }
@@ -53,6 +90,7 @@ export async function POST(req: Request) {
             data: {
               title,
               state: state === "OPEN" ? "OPEN" : "CLOSED",
+              diff: diff || pr.diff || null,
             },
           });
         }

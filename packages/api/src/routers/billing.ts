@@ -1,11 +1,13 @@
 import { z } from "zod";
-import { router, protectedProcedure } from "../trpc";
-import Razorpay from "razorpay";
+import { router, protectedProcedure, enforceOrgMembership } from "../trpc";
+declare const require: any;
+const Razorpay = require("razorpay");
 
 export const billingRouter = router({
   createSubscription: protectedProcedure
     .input(z.object({ organizationId: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      await enforceOrgMembership(ctx, input.organizationId);
       const razorpayKeyId = process.env.RAZORPAY_KEY_ID;
       const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET;
 
@@ -67,6 +69,7 @@ export const billingRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      await enforceOrgMembership(ctx, input.organizationId);
       // Transition organization subscription to PREMIUM
       const sub = await ctx.prisma.orgSubscription.findUnique({
         where: { organizationId: input.organizationId },

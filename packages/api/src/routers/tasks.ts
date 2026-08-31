@@ -1,11 +1,12 @@
 import { z } from "zod";
-import { router, protectedProcedure } from "../trpc";
+import { router, protectedProcedure, enforceFeatureMembership, enforceTaskMembership } from "../trpc";
 import { TRPCError } from "@trpc/server";
 
 export const tasksRouter = router({
   list: protectedProcedure
     .input(z.object({ featureRequestId: z.string() }))
     .query(async ({ ctx, input }) => {
+      await enforceFeatureMembership(ctx, input.featureRequestId);
       return ctx.prisma.task.findMany({
         where: { featureRequestId: input.featureRequestId },
         orderBy: { createdAt: "asc" },
@@ -20,6 +21,7 @@ export const tasksRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      await enforceTaskMembership(ctx, input.taskId);
       const task = await ctx.prisma.task.findUnique({
         where: { id: input.taskId },
       });

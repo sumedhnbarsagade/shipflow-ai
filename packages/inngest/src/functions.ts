@@ -1,8 +1,45 @@
 import { z } from "zod";
-import { google } from "@ai-sdk/google";
+import { groq } from "@ai-sdk/groq";
 import { generateText, generateObject } from "ai";
 import { prisma } from "@repo/db";
 import { inngest } from "./client";
+import { Octokit } from "octokit";
+
+declare const process: any;
+
+const prdSystemPrompt = `
+You are an Elite Principal Product Manager Agent. Your sole output must be a highly structured, enterprise-grade Product Requirements Document (PRD).
+
+You must analyze the feature request and any supplemental context to generate a comprehensive document containing:
+- Problem Statement: A clear definition of the pain point being addressed.
+- Goals: Clear, measurable outcomes we aim to achieve.
+- Non-Goals: Explicit boundaries outlining what will NOT be built in this iteration.
+- User Stories: Standard "As a... I want to... So that..." format mapping out the features.
+- Acceptance Criteria: Technical specifications defining completeness for engineers.
+- Edge Cases: Scenarios involving error states, network drops, or rate limits.
+- Success Metrics: Tangible KPI indicators to trace post-release.
+
+Ensure all criteria are highly detailed, technically accurate, and formatted as clean string blocks.
+`;
+
+const taskPlannerSystemPrompt = `
+You are an expert Technical Project Manager and Agile Scrum Master. Your job is to break down a comprehensive Product Requirements Document (PRD) into discrete, highly actionable, atomic engineering tasks.
+
+CRITICAL IMPLEMENTATION RULES:
+1. Every task must be self-contained and clear enough for an engineer to implement without seeking external clarity.
+2. Group tasks logically: Frontend (UI/UX components), Backend (Database changes, API endpoints, tRPC routes), and Integration (Third-party platforms, Webhooks).
+3. Assign an estimated complexity score (Story Points using standard Fibonacci sequence: 1, 2, 3, 5, 8) and a logical priority ('LOW', 'MEDIUM', 'HIGH').
+`;
+
+const qaReviewerSystemPrompt = `
+You are an elite, highly critical Staff QA Engineer and Code Reviewer. Your task is to evaluate a pull request code diff against the official Product Requirements Document (PRD) and acceptance criteria.
+
+Do not merely check for basic linting syntax errors. You must perform deep semantic analysis:
+1. Verify if the code changes actually implement the exact features specified in the user stories and acceptance criteria.
+2. Call out any missing implementations or half-baked code blocks.
+3. Classify bugs as 'BLOCKING' (security flaws, broken logic, unmet core acceptance criteria) or 'NON_BLOCKING' (minor style inconsistencies, potential performance optimizations).
+4. Provide the exact file path and line number context for any flagged issues so comments can be precision-targeted to the GitHub timeline.
+`;
 
 export const generatePRDWorkflow = inngest.createFunction(
   { id: "generate-prd-workflow" },
@@ -23,31 +60,18 @@ export const generatePRDWorkflow = inngest.createFunction(
       .map((m: any) => `${m.role.toUpperCase()}: ${m.content}`)
       .join("\n\n");
 
-    const prompt = `
-You are an expert Principal Product Manager. Your task is to generate a comprehensive, highly-structured Product Requirements Document (PRD) for the following feature request based on the developer and user discussion.
-
-Feature Request Title: ${featureRequest.title}
-Feature Request Initial Description: ${featureRequest.description}
+    const prdText = await step.run("generate-prd-with-ai", async () => {
+      const { text } = await generateText({
+        model: groq("groq/compound") as any,
+        system: prdSystemPrompt,
+        prompt: `
+Generate a Product Requirements Document (PRD) based on this feature request:
+Title: ${featureRequest.title}
+Initial Description: ${featureRequest.description}
 
 Here is the context gathered through requirement clarification:
 ${chatContext}
-
-Your generated PRD MUST be in Markdown format and include exactly the following sections:
-1. Problem Statement
-2. Goals
-3. Non-Goals
-4. User Stories
-5. Acceptance Criteria
-6. Edge Cases
-7. Success Metrics
-
-Write clean, precise, and professional PM specifications.
-`;
-
-    const prdText = await step.run("generate-prd-with-ai", async () => {
-      const { text } = await generateText({
-        model: google("gemini-1.5-flash") as any,
-        prompt,
+`,
       });
       return text;
     });
@@ -89,24 +113,23 @@ export const generateTasksWorkflow = inngest.createFunction(
 
     const tasks = await step.run("generate-tasks-with-ai", async () => {
       const { object } = await generateObject({
-        model: google("gemini-1.5-flash") as any,
+        model: groq("groq/compound") as any,
         schema: z.object({
           tasks: z.array(
             z.object({
               title: z.string(),
               description: z.string(),
+              points: z.number().describe("Story points (Fibonacci sequence: 1, 2, 3, 5, 8)"),
+              priority: z.enum(["LOW", "MEDIUM", "HIGH"]),
             })
           ),
         }),
+        system: taskPlannerSystemPrompt,
         prompt: `
-Based on the following Product Requirements Document (PRD), break down the requirements into clear, actionable engineering tasks for a Kanban board (TODO).
+Based on the following Product Requirements Document (PRD), break down the requirements into clear, actionable engineering tasks for a Kanban board.
 
 PRD:
 ${featureRequest.prd}
-
-Each task should have:
-1. An engineering-focused Title (e.g. "Database migration for User settings", "Implement Razorpay checkout webhook endpoint").
-2. A detailed Description specifying what to implement, API specifications, or logic required.
 `,
       });
       return object.tasks;
@@ -124,6 +147,8 @@ Each task should have:
               featureRequestId,
               title: task.title,
               description: task.description,
+              points: task.points,
+              priority: task.priority,
               status: "TODO",
             },
           })
@@ -155,6 +180,7 @@ export const reviewPullRequestWorkflow = inngest.createFunction(
           featureRequest: {
             include: {
               tasks: true,
+              project: true,
             },
           },
         },
@@ -167,7 +193,7 @@ export const reviewPullRequestWorkflow = inngest.createFunction(
 
     const reviewResult = await step.run("run-ai-code-review", async () => {
       const { object } = await generateObject({
-        model: google("gemini-1.5-flash") as any,
+        model: groq("groq/compound") as any,
         schema: z.object({
           status: z.enum(["APPROVED", "CHANGES_REQUESTED"]),
           feedback: z.string(),
@@ -176,11 +202,14 @@ export const reviewPullRequestWorkflow = inngest.createFunction(
               title: z.string(),
               description: z.string(),
               severity: z.enum(["BLOCKING", "NON_BLOCKING"]),
+              filePath: z.string().optional().describe("Relative path to the file containing this issue"),
+              lineNumber: z.number().optional().describe("Line number in the file containing this issue"),
             })
           ),
         }),
+        system: qaReviewerSystemPrompt,
         prompt: `
-You are an advanced AI QA & Senior Engineering Reviewer. Your role is to evaluate whether the code changes in the Pull Request satisfy the Product Requirements Document (PRD) and engineering tasks, and verify that the implementation is ready for production.
+Evaluate whether the code changes in the Pull Request satisfy the Product Requirements Document (PRD) and engineering tasks, and verify that the implementation is ready for production.
 
 PRD:
 ${featureRequest.prd}
@@ -191,15 +220,6 @@ ${featureRequest.tasks.map((t: any) => `- [${t.status}] ${t.title}: ${t.descript
 Pull Request Title: ${pullRequest.title}
 Code Diff:
 ${pullRequest.diff || "No code changes found in diff."}
-
-Your evaluation must check:
-1. Requirements satisfaction: does this actually implement the user stories and acceptance criteria in the PRD?
-2. Technical quality: are there any security bugs, race conditions, or major performance bottlenecks?
-3. Task completion: are the tasks covered?
-
-Determine the status (APPROVED if only minor non-blocking issues or no issues exist; CHANGES_REQUESTED if there are critical security, functional, or logical bugs).
-Provide high-quality Markdown feedback summarizing your review.
-Generate a list of specific issues with details and severity (BLOCKING for must-fix bugs, NON_BLOCKING for suggestions/refactoring).
 `,
       });
       return object;
@@ -223,6 +243,8 @@ Generate a list of specific issues with details and severity (BLOCKING for must-
                 title: issue.title,
                 description: issue.description,
                 severity: issue.severity,
+                filePath: issue.filePath || null,
+                lineNumber: issue.lineNumber || null,
                 status: "OPEN",
               },
             })
@@ -234,7 +256,7 @@ Generate a list of specific issues with details and severity (BLOCKING for must-
 
       let newFeatureStatus = "HUMAN_APPROVAL";
       if (blockingCount > 0) {
-        newFeatureStatus = "DEVELOPING"; // Returns to fix-needed state
+        newFeatureStatus = "DEVELOPING";
       }
 
       await prisma.featureRequest.update({
@@ -245,6 +267,44 @@ Generate a list of specific issues with details and severity (BLOCKING for must-
       });
     });
 
-    return { status: "Review completed successfully" };
+    await step.run("post-github-review", async () => {
+      const token = process.env.GITHUB_TOKEN;
+      const repoPath = featureRequest.project.githubRepo;
+      if (!token || !repoPath) {
+        console.log("Skipping posting review to GitHub: Token or Repo path not available.");
+        return;
+      }
+
+      const [owner, repo] = repoPath.split("/");
+      if (!owner || !repo) {
+        console.log("Skipping posting review to GitHub: Invalid Repo path structure.");
+        return;
+      }
+
+      const octokit = new Octokit({ auth: token });
+      
+      const comments = reviewResult.issues
+        .filter((issue) => issue.filePath && issue.lineNumber)
+        .map((issue) => ({
+          path: issue.filePath!,
+          line: issue.lineNumber!,
+          body: `**[${issue.severity}] ${issue.title}**\n\n${issue.description}`,
+        }));
+
+      try {
+        await octokit.rest.pulls.createReview({
+          owner,
+          repo,
+          pull_number: pullRequest.prNumber,
+          event: reviewResult.status === "APPROVED" ? "APPROVE" : "REQUEST_CHANGES",
+          body: `### ShipFlow AI QA Code Review\n\n${reviewResult.feedback}`,
+          comments: comments.length > 0 ? comments : undefined,
+        });
+      } catch (err: any) {
+        console.error("Failed to create review on GitHub:", err);
+      }
+    });
+
+    return { status: "Review completed successfully and posted to GitHub" };
   }
 );

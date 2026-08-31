@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, use } from "react";
 import { useRouter } from "next/navigation";
 import { trpc } from "../../../lib/trpc";
+import { ThemeToggle } from "../../ThemeToggle";
 import { authClient } from "../../../lib/auth-client";
 import { 
   ArrowLeft, 
@@ -306,8 +307,9 @@ export default function FeaturePage({ params }: { params: Promise<{ id: string }
         </div>
 
         {/* Tab Navigation links */}
-        <div style={{ display: "flex", gap: "6px" }}>
-          <button 
+        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+          <div style={{ display: "flex", gap: "6px" }}>
+            <button 
             onClick={() => setActiveTab("clarify")} 
             className="glow-btn-secondary" 
             style={{ 
@@ -380,6 +382,9 @@ export default function FeaturePage({ params }: { params: Promise<{ id: string }
           >
             5. Release Sign-off
           </button>
+          </div>
+          <div style={{ width: "1px", height: "16px", background: "var(--border-color)" }}></div>
+          <ThemeToggle />
         </div>
       </header>
 

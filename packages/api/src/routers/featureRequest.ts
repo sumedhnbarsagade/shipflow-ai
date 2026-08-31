@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { router, protectedProcedure } from "../trpc";
+import { router, protectedProcedure, enforceProjectMembership, enforceFeatureMembership } from "../trpc";
 import { TRPCError } from "@trpc/server";
-import { google } from "@ai-sdk/google";
+import { groq } from "@ai-sdk/groq";
 import { generateText } from "ai";
 import { inngest } from "@repo/inngest";
 
@@ -9,6 +9,7 @@ export const featureRequestRouter = router({
   list: protectedProcedure
     .input(z.object({ projectId: z.string() }))
     .query(async ({ ctx, input }) => {
+      await enforceProjectMembership(ctx, input.projectId);
       return ctx.prisma.featureRequest.findMany({
         where: { projectId: input.projectId },
         orderBy: { createdAt: "desc" },
@@ -18,6 +19,7 @@ export const featureRequestRouter = router({
   getById: protectedProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
+      await enforceFeatureMembership(ctx, input.id);
       const feature = await ctx.prisma.featureRequest.findUnique({
         where: { id: input.id },
         include: {
@@ -51,6 +53,7 @@ export const featureRequestRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      await enforceProjectMembership(ctx, input.projectId);
       const existingFeatures = await ctx.prisma.featureRequest.findMany({
         where: { projectId: input.projectId },
         select: { title: true, description: true },
@@ -62,7 +65,7 @@ export const featureRequestRouter = router({
         try {
           const listStr = existingFeatures.map((f) => `- ${f.title}: ${f.description}`).join("\n");
           const { text } = await generateText({
-            model: google("gemini-1.5-flash") as any,
+            model: groq("groq/compound") as any,
             prompt: `
 You are an AI Product Owner assistant. A user wants to submit a new feature request:
 Title: ${input.title}
@@ -107,7 +110,7 @@ Analyze the request and write a professional, encouraging response. Ask 2-3 targ
 `;
         try {
           const { text: followUp } = await generateText({
-            model: google("gemini-1.5-flash") as any,
+            model: groq("groq/compound") as any,
             prompt: clarificationPrompt,
           });
 
@@ -142,6 +145,7 @@ Analyze the request and write a professional, encouraging response. Ask 2-3 targ
       })
     )
     .mutation(async ({ ctx, input }) => {
+      await enforceFeatureMembership(ctx, input.featureRequestId);
       await ctx.prisma.featureRequestChat.create({
         data: {
           featureRequestId: input.featureRequestId,
@@ -186,7 +190,7 @@ If you still need details, ask 1-2 concise questions. Keep the reply friendly, a
 `;
 
       const { text: aiReply } = await generateText({
-        model: google("gemini-1.5-flash") as any,
+        model: groq("groq/compound") as any,
         prompt,
       });
 
@@ -204,6 +208,7 @@ If you still need details, ask 1-2 concise questions. Keep the reply friendly, a
   finalizeAndGenerate: protectedProcedure
     .input(z.object({ featureRequestId: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      await enforceFeatureMembership(ctx, input.featureRequestId);
       const feature = await ctx.prisma.featureRequest.findUnique({
         where: { id: input.featureRequestId },
       });

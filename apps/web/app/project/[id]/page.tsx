@@ -3,6 +3,7 @@
 import { useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { trpc } from "../../../lib/trpc";
+import { ThemeToggle } from "../../ThemeToggle";
 import { 
   ArrowLeft, 
   GitBranch, 
@@ -168,19 +169,22 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           <h1 style={{ fontSize: "1.25rem", fontWeight: "bold" }}>{project.name}</h1>
         </div>
 
-        {/* GitHub repo status block */}
-        <button 
-          onClick={() => { setGithubRepoInput(project.githubRepo || ""); setErrorMsg(""); setShowConnectRepo(true); }}
-          className="glow-btn-secondary" 
-          style={{ fontSize: "0.85rem", padding: "8px 14px", display: "flex", alignItems: "center", gap: "8px" }}
-        >
-          <GitBranch size={16} />
-          {project.githubRepo ? (
-            <span>Connected: <strong style={{ color: "var(--text-primary)" }}>{project.githubRepo}</strong></span>
-          ) : (
-            <span>Connect GitHub Repo</span>
-          )}
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <ThemeToggle />
+          {/* GitHub repo status block */}
+          <button 
+            onClick={() => { setGithubRepoInput(project.githubRepo || ""); setErrorMsg(""); setShowConnectRepo(true); }}
+            className="glow-btn-secondary" 
+            style={{ fontSize: "0.85rem", padding: "8px 14px", display: "flex", alignItems: "center", gap: "8px" }}
+          >
+            <GitBranch size={16} />
+            {project.githubRepo ? (
+              <span>Connected: <strong style={{ color: "var(--text-primary)" }}>{project.githubRepo}</strong></span>
+            ) : (
+              <span>Connect GitHub Repo</span>
+            )}
+          </button>
+        </div>
       </header>
 
       {/* Main Board content */}

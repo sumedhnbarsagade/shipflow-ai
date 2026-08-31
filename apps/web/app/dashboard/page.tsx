@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { authClient } from "../../lib/auth-client";
 import { trpc } from "../../lib/trpc";
+import { ThemeToggle } from "../ThemeToggle";
 import { 
   Plus, 
   Folder, 
@@ -11,12 +12,10 @@ import {
   CreditCard, 
   Sparkles, 
   LogOut, 
-  Building,
   ArrowRight,
-  GitPullRequest,
-  CheckCircle,
-  AlertTriangle,
-  Loader2
+  Building,
+  Loader2,
+  Github
 } from "lucide-react";
 import Link from "next/link";
 
@@ -28,7 +27,7 @@ export default function DashboardPage() {
   const [sessionLoading, setSessionLoading] = useState(true);
   
   // Organization state
-  const { data: orgsData, error: orgsError, refetch: refetchOrgs } = authClient.useListOrganizations();
+  const { data: orgsData, refetch: refetchOrgs } = authClient.useListOrganizations();
   const { data: activeOrg } = authClient.useActiveOrganization();
   
   // Modals / forms state
@@ -40,6 +39,33 @@ export default function DashboardPage() {
   const [githubRepo, setGithubRepo] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
   const [formError, setFormError] = useState("");
+  const [repoSearch, setRepoSearch] = useState("");
+  const [showManualInput, setShowManualInput] = useState(false);
+
+  // Query GitHub Repositories (only when modal is open)
+  const { data: githubData, isLoading: githubLoading } = trpc.project.listGithubRepos.useQuery(
+    undefined,
+    { enabled: showCreateProject }
+  );
+
+  const handleConnectGithub = async () => {
+    setActionLoading(true);
+    setFormError("");
+    try {
+      await authClient.linkSocial({
+        provider: "github",
+        callbackURL: window.location.origin + "/dashboard",
+      });
+    } catch (err: any) {
+      setFormError(err.message || "Failed to link GitHub account");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const filteredRepos = githubData?.repos?.filter((r: any) =>
+    r.fullName.toLowerCase().includes(repoSearch.toLowerCase())
+  ) || [];
 
   // Get session
   useEffect(() => {
@@ -51,7 +77,7 @@ export default function DashboardPage() {
         } else {
           setSession(data);
         }
-      } catch (e) {
+      } catch {
         router.push("/auth");
       } finally {
         setSessionLoading(false);
@@ -59,6 +85,16 @@ export default function DashboardPage() {
     }
     checkSession();
   }, [router]);
+
+  // Auto-set active organization if none is active but user has organizations
+  useEffect(() => {
+    if (orgsData && orgsData.length > 0 && !activeOrg) {
+      const firstOrg = orgsData[0];
+      if (firstOrg?.id) {
+        authClient.organization.setActive({ organizationId: firstOrg.id });
+      }
+    }
+  }, [orgsData, activeOrg]);
 
   // Query projects for active organization
   const activeOrgId = activeOrg?.id || "";
@@ -243,9 +279,12 @@ export default function DashboardPage() {
               <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{session?.user?.email}</span>
             </div>
           </div>
-          <button onClick={handleSignOut} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: "4px" }} title="Sign Out">
-            <LogOut size={16} />
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <ThemeToggle />
+            <button onClick={handleSignOut} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: "4px" }} title="Sign Out">
+              <LogOut size={16} />
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -307,16 +346,18 @@ export default function DashboardPage() {
                     <p style={{ color: "var(--text-secondary)", fontSize: "0.85rem", flexGrow: 1, lineBreak: "anywhere" }}>
                       {project.description || "No description provided."}
                     </p>
-                    <div style={{ borderTop: "1px solid var(--border-color)", paddingTop: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                      <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                        <GitBranch size={14} />
+                    <div style={{ borderTop: "1px solid var(--border-color)", paddingTop: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.75rem", color: "var(--text-muted)", gap: "12px" }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0, flexGrow: 1 }}>
+                        <GitBranch size={14} style={{ flexShrink: 0 }} />
                         {project.githubRepo ? (
-                          <span style={{ color: "var(--text-secondary)", fontWeight: "500" }}>{project.githubRepo}</span>
+                          <span style={{ color: "var(--text-secondary)", fontWeight: "500", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }} title={project.githubRepo}>
+                            {project.githubRepo}
+                          </span>
                         ) : (
-                          <span>Connect repo</span>
+                          <span style={{ color: "var(--text-muted)" }}>Connect repo</span>
                         )}
                       </span>
-                      <span style={{ display: "flex", alignItems: "center", gap: "4px", color: "var(--color-primary)", fontWeight: "600" }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: "4px", color: "var(--color-primary)", fontWeight: "600", flexShrink: 0 }}>
                         View Board <ArrowRight size={12} />
                       </span>
                     </div>
@@ -370,52 +411,171 @@ export default function DashboardPage() {
         {/* Modal: Create Project */}
         {showCreateProject && (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)", zIndex: 99, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
-            <div className="glass" style={{ width: "100%", maxWidth: "460px", padding: "32px", display: "flex", flexDirection: "column", gap: "20px" }}>
-              <h3 style={{ fontSize: "1.25rem", fontWeight: "bold" }}>Create New Project</h3>
+            <div className="glass" style={{ width: "100%", maxWidth: "600px", padding: "32px", display: "flex", flexDirection: "column", gap: "20px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <h3 style={{ fontSize: "1.25rem", fontWeight: "bold" }}>Create New Project</h3>
+                <button 
+                  onClick={() => {
+                    setShowCreateProject(false);
+                    setShowManualInput(false);
+                    setRepoSearch("");
+                  }} 
+                  style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: "1.1rem" }}
+                >
+                  ✕
+                </button>
+              </div>
+              
               {formError && <div style={{ color: "var(--color-danger)", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", padding: "10px", borderRadius: "6px", fontSize: "0.8rem" }}>{formError}</div>}
-              <form onSubmit={handleCreateProject} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                  <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Project Name</label>
-                  <input
-                    type="text"
-                    value={projectName}
-                    onChange={(e) => setProjectName(e.target.value)}
-                    required
-                    placeholder="My SaaS App"
-                    style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--border-color)", borderRadius: "8px", padding: "10px 14px", outline: "none" }}
-                  />
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                  <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Description (Optional)</label>
-                  <textarea
-                    value={projectDesc}
-                    onChange={(e) => setProjectDesc(e.target.value)}
-                    placeholder="Build the core billing engine and checkouts"
-                    style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--border-color)", borderRadius: "8px", padding: "10px 14px", outline: "none", height: "80px", resize: "none" }}
-                  />
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>GitHub Repository (Optional)</label>
-                    {subscription?.plan !== "PREMIUM" && (
-                      <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Free Plan limit: 1 repo</span>
+              
+              {!showManualInput && githubData && githubData.connected ? (
+                // GitHub Repository List (Vercel style)
+                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)", fontWeight: "500" }}>Import GitHub Repository</label>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <input
+                        type="text"
+                        value={repoSearch}
+                        onChange={(e) => setRepoSearch(e.target.value)}
+                        placeholder="Search repositories..."
+                        style={{ flexGrow: 1, background: "rgba(255,255,255,0.03)", border: "1px solid var(--border-color)", borderRadius: "8px", padding: "8px 12px", outline: "none", fontSize: "0.9rem", color: "var(--text-primary)" }}
+                      />
+                      <button 
+                        onClick={() => setShowManualInput(true)} 
+                        className="glow-btn-secondary"
+                        style={{ padding: "8px 12px", fontSize: "0.8rem", whiteSpace: "nowrap" }}
+                      >
+                        Configure Manually
+                      </button>
+                    </div>
+                  </div>
+
+                  <div style={{ maxHeight: "240px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "8px", paddingRight: "4px" }}>
+                    {githubLoading ? (
+                      <div style={{ display: "flex", padding: "40px", justifyContent: "center", alignItems: "center" }}>
+                        <Loader2 className="animate-spin text-indigo-500" size={24} />
+                      </div>
+                    ) : filteredRepos.length > 0 ? (
+                      filteredRepos.map((repo: any) => (
+                        <div key={repo.id} className="glass-interactive" style={{ padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", borderRadius: "8px" }}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "2px", minWidth: 0, textAlign: "left" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                              <GitBranch size={14} style={{ color: "var(--color-primary)" }} />
+                              <span style={{ fontWeight: "600", fontSize: "0.85rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{repo.fullName}</span>
+                              {repo.private && <span style={{ fontSize: "0.7rem", padding: "2px 6px", borderRadius: "4px", background: "rgba(255,255,255,0.05)", color: "var(--text-muted)" }}>Private</span>}
+                            </div>
+                            {repo.description && (
+                              <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{repo.description}</span>
+                            )}
+                          </div>
+                          <button 
+                            onClick={() => {
+                              setProjectName(repo.name);
+                              setGithubRepo(repo.fullName);
+                              setShowManualInput(true);
+                            }}
+                            className="glow-btn"
+                            style={{ padding: "6px 12px", fontSize: "0.8rem", flexShrink: 0 }}
+                          >
+                            Import
+                          </button>
+                        </div>
+                      ))
+                    ) : (
+                      <div style={{ textAlign: "center", padding: "24px", color: "var(--text-muted)", fontSize: "0.85rem" }}>
+                        No repositories found matching search query.
+                      </div>
                     )}
                   </div>
-                  <input
-                    type="text"
-                    value={githubRepo}
-                    onChange={(e) => setGithubRepo(e.target.value)}
-                    placeholder="owner/repo (e.g. vercel/next.js)"
-                    style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--border-color)", borderRadius: "8px", padding: "10px 14px", outline: "none" }}
-                  />
                 </div>
-                <div style={{ display: "flex", justifyItems: "flex-end", gap: "12px", marginTop: "8px" }}>
-                  <button type="button" onClick={() => setShowCreateProject(false)} className="glow-btn-secondary" style={{ flexGrow: 1, padding: "8px", justifyContent: "center" }}>Cancel</button>
-                  <button type="submit" className="glow-btn" disabled={actionLoading} style={{ flexGrow: 1, padding: "8px", justifyContent: "center" }}>
-                    {actionLoading ? <Loader2 className="animate-spin" size={16} /> : "Create Project"}
-                  </button>
+              ) : !showManualInput && (!githubData || !githubData.connected) ? (
+                // Link GitHub account display
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "16px", padding: "24px 0", textAlign: "center" }}>
+                  <div style={{ width: "48px", height: "48px", borderRadius: "50%", background: "rgba(255,255,255,0.03)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Github size={24} />
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                    <h4 style={{ fontWeight: "bold", fontSize: "1rem" }}>Import Git Repository</h4>
+                    <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", maxWidth: "340px" }}>
+                      Connect your GitHub account to import repositories and track features directly from pull requests.
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", gap: "12px", width: "100%", justifyContent: "center", marginTop: "8px" }}>
+                    <button 
+                      onClick={() => setShowManualInput(true)} 
+                      className="glow-btn-secondary" 
+                      style={{ padding: "8px 16px", fontSize: "0.85rem" }}
+                    >
+                      Configure Manually
+                    </button>
+                    <button 
+                      onClick={handleConnectGithub} 
+                      className="glow-btn" 
+                      disabled={actionLoading}
+                      style={{ padding: "8px 16px", fontSize: "0.85rem" }}
+                    >
+                      {actionLoading ? <Loader2 className="animate-spin" size={16} /> : "Connect GitHub"}
+                    </button>
+                  </div>
                 </div>
-              </form>
+              ) : (
+                // Manual/Selected configuration form
+                <form onSubmit={handleCreateProject} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Project Name</label>
+                    <input
+                      type="text"
+                      value={projectName}
+                      onChange={(e) => setProjectName(e.target.value)}
+                      required
+                      placeholder="My SaaS App"
+                      style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--border-color)", borderRadius: "8px", padding: "10px 14px", outline: "none", color: "var(--text-primary)" }}
+                    />
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Description (Optional)</label>
+                    <textarea
+                      value={projectDesc}
+                      onChange={(e) => setProjectDesc(e.target.value)}
+                      placeholder="Build the core billing engine and checkouts"
+                      style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--border-color)", borderRadius: "8px", padding: "10px 14px", outline: "none", height: "80px", resize: "none", color: "var(--text-primary)" }}
+                    />
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <label style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>GitHub Repository (Optional)</label>
+                      {subscription?.plan !== "PREMIUM" && (
+                        <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Free Plan limit: 1 repo</span>
+                      )}
+                    </div>
+                    <input
+                      type="text"
+                      value={githubRepo}
+                      onChange={(e) => setGithubRepo(e.target.value)}
+                      placeholder="owner/repo (e.g. vercel/next.js)"
+                      style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--border-color)", borderRadius: "8px", padding: "10px 14px", outline: "none", color: "var(--text-primary)" }}
+                    />
+                  </div>
+                  <div style={{ display: "flex", justifyItems: "flex-end", gap: "12px", marginTop: "8px" }}>
+                    <button 
+                      type="button" 
+                      onClick={() => {
+                        setShowManualInput(false);
+                        setGithubRepo("");
+                        setProjectName("");
+                      }} 
+                      className="glow-btn-secondary" 
+                      style={{ flexGrow: 1, padding: "8px", justifyContent: "center" }}
+                    >
+                      Back to Importer
+                    </button>
+                    <button type="submit" className="glow-btn" disabled={actionLoading} style={{ flexGrow: 1, padding: "8px", justifyContent: "center" }}>
+                      {actionLoading ? <Loader2 className="animate-spin" size={16} /> : "Create Project"}
+                    </button>
+                  </div>
+                </form>
+              )}
             </div>
           </div>
         )}

@@ -4,6 +4,7 @@ import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { authClient } from "../../lib/auth-client";
 import { trpc } from "../../lib/trpc";
+import { ThemeToggle } from "../ThemeToggle";
 import { 
   Sparkles, 
   CheckCircle, 
@@ -101,9 +102,13 @@ function BillingContent() {
         <Link href="/dashboard" style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--text-secondary)", fontSize: "0.9rem" }}>
           <ArrowLeft size={16} /> Back to dashboard
         </Link>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: "bold" }}>
-          <Sparkles size={16} style={{ color: "#6366f1" }} />
-          <span className="text-gradient">ShipFlow AI Billing</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: "bold" }}>
+            <Sparkles size={16} style={{ color: "#6366f1" }} />
+            <span className="text-gradient">ShipFlow AI Billing</span>
+          </div>
+          <div style={{ width: "1px", height: "16px", background: "var(--border-color)" }}></div>
+          <ThemeToggle />
         </div>
       </header>
 
