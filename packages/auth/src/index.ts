@@ -10,6 +10,7 @@ export const auth = betterAuth({
     provider: "postgresql",
   }),
   secret: process.env.BETTER_AUTH_SECRET || "fallback-secret-for-build-purposes-only-12345",
+  baseURL: process.env.NEXT_PUBLIC_APP_URL || process.env.BETTER_AUTH_URL,
   emailAndPassword: {
     enabled: true,
   },
